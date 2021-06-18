@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.Linq;
@@ -6,13 +6,14 @@ using System.IO;
 
 namespace Coffee.Editors
 {
-    internal class SubAssetEditor : EditorWindow
+    internal class SubAssetEditor : EditorWindow, IHasCustomMenu
     {
         private static GUIContent _contentNoRef;
         private static GUIContent _contentAdd;
         private static GUIContent _contentDelete;
         private static GUIContent _contentImport;
         private static GUIContent _contentExport;
+        private static GUIStyle lockButtonStyle;
         private static bool _cached = false;
         const float ICON_SIZE = 20;
 
@@ -157,20 +158,7 @@ namespace Coffee.Editors
             CacheGUI();
             if (!_current) return;
 
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                var rLabel = EditorGUILayout.GetControlRect(GUILayout.Width(80));
-                GUI.Toggle(rLabel, true, "<b>Main Asset</b>", "IN Foldout");
-
-                var rLock = EditorGUILayout.GetControlRect(GUILayout.Width(20));
-                rLock.y += 2;
-                if (GUI.Toggle(rLock, _isLocked, GUIContent.none, "IN LockButton") != _isLocked)
-                {
-                    _isLocked = !_isLocked;
-                }
-
-                GUILayout.FlexibleSpace();
-            }
+            GUILayout.Toggle(true, "<b>Main Asset</b>", "IN Foldout");
 
             EditorGUI.indentLevel++;
             using (new EditorGUILayout.HorizontalScope())
@@ -374,6 +362,29 @@ namespace Coffee.Editors
             else if (obj is ScriptableObject)
                 return "asset";
             return "";
+        }
+
+        /// <summary>
+        /// Magic method which Unity detects automatically.
+        /// </summary>
+        /// <param name="position">Position of button.</param>
+        private void ShowButton(Rect position)
+        {
+            if (lockButtonStyle == null) {
+                lockButtonStyle = "IN LockButton";
+            }
+            this._isLocked = GUI.Toggle(position, this._isLocked, GUIContent.none, lockButtonStyle);
+        }
+
+        /// <summary>
+        /// Adds custom items to editor window context menu.
+        /// </summary>
+        /// <param name="menu">Context menu.</param>
+        public void AddItemsToMenu(GenericMenu menu)
+        {
+            menu.AddItem(new GUIContent("Lock"), _isLocked, () => {
+                _isLocked = !_isLocked;
+            });
         }
     }
 }
