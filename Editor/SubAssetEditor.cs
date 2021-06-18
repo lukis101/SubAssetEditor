@@ -70,15 +70,23 @@ namespace Coffee.Editors
 
             // Find sub-assets.
             var assetPath = AssetDatabase.GetAssetPath(active);
-            _subAssets = AssetDatabase.LoadAllAssetsAtPath(assetPath)
-                .Where(x => x != _current && 0 == (x.hideFlags & HideFlags.HideInHierarchy))
+            var allassets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+            _subAssets = allassets
+                .Where(x => x != _current && x !=null && 0 == (x.hideFlags & HideFlags.HideInHierarchy))
                 .Distinct()
                 .ToList();
 
             // Find referencing assets.
+            int brokens = 0;
             _referencingAssets.Clear();
-            foreach (var o in AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GetAssetPath(active)))
+            foreach (var o in allassets)
             {
+                if (o == null)
+                {
+                    brokens++;
+                    continue;
+                }
+                
                 var sp = new SerializedObject(o).GetIterator();
                 sp.Next(true);
 
@@ -93,6 +101,10 @@ namespace Coffee.Editors
                         _referencingAssets.Add(asset);
                     }
                 }
+            }
+            if (brokens > 0)
+            {
+                Debug.LogWarning("Asset contains " + brokens + " broken sub-assets!");
             }
 
             // Refresh GUI.
@@ -365,6 +377,28 @@ namespace Coffee.Editors
         }
 
         /// <summary>
+        /// Remove sub-assets that have no references
+        /// </summary>
+        private void CleanupSubAssets()
+        {
+            if (!_current)
+                return;
+
+            AssetDatabase.StartAssetEditing();
+            foreach (var asset in _subAssets)
+            {
+                if (!_referencingAssets.Contains(asset))
+                {
+                    DeleteSubAsset(asset);
+                }
+            }
+            AssetDatabase.StopAssetEditing();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            OnSelectionChanged(_current);
+        }
+        
+        /// <summary>
         /// Magic method which Unity detects automatically.
         /// </summary>
         /// <param name="position">Position of button.</param>
@@ -385,6 +419,7 @@ namespace Coffee.Editors
             menu.AddItem(new GUIContent("Lock"), _isLocked, () => {
                 _isLocked = !_isLocked;
             });
+            menu.AddItem(new GUIContent("Remove Unreferenced Sub-Assets"), false, CleanupSubAssets);
         }
     }
 }
