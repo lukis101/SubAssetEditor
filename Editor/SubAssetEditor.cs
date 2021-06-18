@@ -13,6 +13,8 @@ namespace Coffee.Editors
         private static GUIContent _contentDelete;
         private static GUIContent _contentImport;
         private static GUIContent _contentExport;
+        private static GUIContent _contentVisible;
+        private static GUIContent _contentHidden;
         private static GUIStyle lockButtonStyle;
         private static bool _cached = false;
         const float ICON_SIZE = 20;
@@ -20,6 +22,7 @@ namespace Coffee.Editors
         private bool _isLocked;
         private bool _isRenaming;
         private bool _hasSelectionChanged;
+        private bool _editHidden = false;
         private Object _current;
         private Vector2 _scrollPosition;
         private List<Object> _subAssets = new List<Object>();
@@ -36,6 +39,8 @@ namespace Coffee.Editors
             _contentDelete = new GUIContent(EditorGUIUtility.FindTexture("treeeditor.trash"), "Delete asset");
             _contentImport = new GUIContent("Drag & Drop object to add as sub-asset.", EditorGUIUtility.FindTexture("toolbar plus"));
             _contentExport = new GUIContent(EditorGUIUtility.FindTexture("saveactive"), "Export asset");
+            _contentVisible = EditorGUIUtility.IconContent("animationvisibilitytoggleon");
+            _contentHidden = EditorGUIUtility.IconContent("animationvisibilitytoggleoff");
         }
 
         [MenuItem("Assets/Sub Asset Editor")]
@@ -72,7 +77,7 @@ namespace Coffee.Editors
             var assetPath = AssetDatabase.GetAssetPath(active);
             var allassets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
             _subAssets = allassets
-                .Where(x => x != _current && x !=null && 0 == (x.hideFlags & HideFlags.HideInHierarchy))
+                .Where(x => x != _current && x !=null && (_editHidden || 0 == (x.hideFlags & HideFlags.HideInHierarchy)))
                 .Distinct()
                 .ToList();
 
@@ -96,7 +101,7 @@ namespace Coffee.Editors
                     if (sp.propertyType != SerializedPropertyType.ObjectReference || !sp.objectReferenceValue) continue;
 
                     var asset = sp.objectReferenceValue;
-                    if (active != asset && o != asset && 0 == (asset.hideFlags & HideFlags.HideInHierarchy) && !_referencingAssets.Contains(asset))
+                    if (active != asset && o != asset && (_editHidden || 0 == (asset.hideFlags & HideFlags.HideInHierarchy)) && !_referencingAssets.Contains(asset))
                     {
                         _referencingAssets.Add(asset);
                     }
@@ -208,6 +213,10 @@ namespace Coffee.Editors
                 var r = EditorGUILayout.GetControlRect(true);
 
                 r.width -= 60;
+                if (_editHidden)
+                {
+                    r.width -= 20;
+                }
                 var rField = new Rect(r);
                 if (_isRenaming)
                 {
@@ -243,6 +252,29 @@ namespace Coffee.Editors
                 if (GetFileExtension(asset).Length != 0 && GUI.Button(r, _contentExport, EditorStyles.label))
                 {
                     ExportSubAsset(asset);
+                }
+
+                if (_editHidden)
+                {
+                    r.x += r.width;
+                    if (asset.hideFlags.HasFlag(HideFlags.HideInHierarchy))
+                    {
+                        if (GUI.Button(r, _contentHidden, EditorStyles.label))
+                        {
+                            asset.hideFlags = asset.hideFlags & ~HideFlags.HideInHierarchy;
+                            AssetDatabase.SaveAssets();
+                            AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(asset));
+                        }
+                    }
+                    else
+                    {
+                        if (GUI.Button(r, _contentVisible, EditorStyles.label))
+                        {
+                            asset.hideFlags = asset.hideFlags | HideFlags.HideInHierarchy;
+                            AssetDatabase.SaveAssets();
+                            AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(asset));
+                        }
+                    }
                 }
 
                 r.x += r.width;
@@ -418,6 +450,10 @@ namespace Coffee.Editors
         {
             menu.AddItem(new GUIContent("Lock"), _isLocked, () => {
                 _isLocked = !_isLocked;
+            });
+            menu.AddItem(new GUIContent("Hidden Assets"), _editHidden, () => {
+                _editHidden = !_editHidden;
+                OnSelectionChanged(_current);
             });
             menu.AddItem(new GUIContent("Remove Unreferenced Sub-Assets"), false, CleanupSubAssets);
         }
